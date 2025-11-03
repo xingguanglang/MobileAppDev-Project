@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:csen268_project/cubits/project_cubit.dart';
 import 'package:csen268_project/widgets/my_project_card.dart';
 import 'package:csen268_project/widgets/bottom_nav_bar.dart';
+import 'package:go_router/go_router.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -88,6 +89,10 @@ class HomePage extends StatelessWidget {
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
         onTabSelected: (index) {
+            if (index == 3) {
+            context.push('/export'); // ✅ 第四個 icon (share) 也能跳轉
+          // TODO: jump or update status according to index
+          }
           if (index == 1) {
             // 跳转到相机页面
             context.go('/camera');
