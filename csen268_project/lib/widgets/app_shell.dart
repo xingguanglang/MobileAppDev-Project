@@ -18,6 +18,7 @@ class _AppShellState extends State<AppShell> {
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     _currentIndex = _routes.indexOf(widget.location);
+    
   }
 
   @override
