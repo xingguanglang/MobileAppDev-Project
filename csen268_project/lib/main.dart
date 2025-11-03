@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:csen268_project/cubits/project_cubit.dart';
 import 'package:csen268_project/pages/home_page.dart';
+import 'package:csen268_project/pages/camera_page.dart';
+import 'package:csen268_project/pages/media_selection_page.dart';
 import 'package:go_router/go_router.dart';
 
 final GoRouter _router = GoRouter(
@@ -11,6 +13,16 @@ final GoRouter _router = GoRouter(
       path: '/',
       name: 'home',
       builder: (context, state) => const HomePage(),
+    ),
+    GoRoute(
+      path: '/camera',
+      name: 'camera',
+      builder: (context, state) => const CameraPage(),
+    ),
+    GoRoute(
+      path: '/media-selection',
+      name: 'media-selection',
+      builder: (context, state) => const MediaSelectionPage(),
     ),
   ],
 );
