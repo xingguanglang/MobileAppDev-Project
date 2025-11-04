@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:csen268_project/cubits/project_cubit.dart';
-import 'package:csen268_project/pages/home_page.dart';
-import 'package:csen268_project/pages/editor_page.dart';
-import 'package:csen268_project/pages/camera_page.dart';
-import 'package:csen268_project/pages/media_selection_page.dart';
-import 'package:go_router/go_router.dart';
-import 'package:csen268_project/pages/export_screen.dart';
 import 'routes/app_router.dart';
 
 // Remove old _router and use appRouter
