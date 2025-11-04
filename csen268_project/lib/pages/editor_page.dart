@@ -101,7 +101,12 @@ class _EditorPageState extends State<EditorPage> {
 
               // import/export
               onImport: _importImage,
-              onExport: () => context.go('/export'),
+              onExport: () {
+                // teammates handle Export
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Export feature handled by teammates (placeholder).')),
+                );
+              },
               background: card,
             ),
           ],

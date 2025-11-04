@@ -87,6 +87,17 @@ class HomePage extends StatelessWidget {
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
+        onTabSelected: (index) {
+            if (index == 3) {
+            context.push('/export');
+          // TODO: jump or update status according to index
+          }
+          if (index == 1) {
+            // jump to the camera page
+            context.go('/camera');
+          }
+          // TODO: handle other index navigation
+        },
       ),
     );
   }

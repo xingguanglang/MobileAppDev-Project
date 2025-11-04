@@ -7,9 +7,38 @@ import 'package:csen268_project/pages/camera_page.dart';
 import 'package:csen268_project/pages/media_selection_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:csen268_project/pages/export_screen.dart';
-import 'routes/app_router.dart';
 
-// Remove old _router and use appRouter
+final GoRouter _router = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      name: 'home',
+      builder: (context, state) => const HomePage(),
+    ),
+    GoRoute(
+      path: '/export',
+      name: 'export',
+      builder: (context, state) => const ExportScreen(),
+    ),
+    GoRoute(
+      path: '/camera',
+      name: 'camera',
+      builder: (context, state) => const CameraPage(),
+    ),
+    GoRoute(
+      path: '/editor',
+      name: 'editor',
+      builder: (context, state) => const EditorPage(),
+    ),
+    GoRoute(
+      path: '/media-selection',
+      name: 'media-selection',
+      builder: (context, state) => const MediaSelectionPage(),
+    ),
+  ],
+);
+
 void main() {
   runApp(const MyApp());
 }
@@ -23,7 +52,7 @@ class MyApp extends StatelessWidget {
     return BlocProvider(
       create: (_) => ProjectCubit()..loadProjects(),
       child: MaterialApp.router(
-        routerConfig: appRouter,
+        routerConfig: _router,
         title: 'Flutter Demo',
         theme: ThemeData(
           // This is the theme of your application.
