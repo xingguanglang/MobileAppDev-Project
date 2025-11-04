@@ -27,25 +27,25 @@ class _CameraPageView extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF7FBF9),
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
-            // top bar
+            // 顶部栏
             _buildTopBar(context),
-            // camera preview area
+            // 相机预览区域
             Expanded(
               child: _buildCameraPreview(context),
             ),
-            // camera mode selector
+            // 相机模式选择
             _buildCameraModeSelector(context),
             const SizedBox(height: 16),
-            // control buttons
+            // 控制按钮
             _buildControlButtons(context),
             const SizedBox(height: 24),
+            // 底部导航栏
+            _buildBottomNavBar(context),
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 1),
     );
   }
 
@@ -54,17 +54,17 @@ class _CameraPageView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // left close button (iOS style)
+          // 左侧关闭按钮 (iOS风格)
           IconButton(
             icon: Icon(
               Platform.isIOS ? CupertinoIcons.xmark : Icons.close,
               size: 24,
               color: const Color(0xFF9E9E9E),
             ),
-            onPressed: () => context.go('/'),
+            onPressed: () => context.pop(),
           ),
           const Spacer(),
-          // title
+          // 标题
           const Text(
             'Camera',
             style: TextStyle(
@@ -75,7 +75,7 @@ class _CameraPageView extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // right setting button
+          // 右侧设置按钮
           IconButton(
             icon: Image.asset(
               'assets/icons/setting.png',
@@ -83,7 +83,7 @@ class _CameraPageView extends StatelessWidget {
               height: 24,
             ),
             onPressed: () {
-              // TODO: open settings
+              // TODO: 打开设置
             },
           ),
         ],
@@ -113,7 +113,7 @@ class _CameraPageView extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // TODO: the actual camera preview will replace this placeholder
+                // TODO: 实际的相机预览将替换这个占位符
                 Container(
                   color: Colors.black87,
                   child: const Center(
@@ -137,7 +137,7 @@ class _CameraPageView extends StatelessWidget {
                     ),
                   ),
                 ),
-                // loading state (iOS style uses CupertinoActivityIndicator)
+                // 加载状态 (iOS风格使用CupertinoActivityIndicator)
                 if (!state.isInitialized)
                   Container(
                     color: Colors.black54,
@@ -250,13 +250,13 @@ class _CameraPageView extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // gallery button
+              // 图库按钮
               _buildGalleryButton(context),
               const SizedBox(width: 16),
-              // take picture button
+              // 拍照按钮
               _buildCaptureButton(context),
               const SizedBox(width: 16),
-              // record button
+              // 录像按钮
               _buildRecordButton(context, state),
             ],
           ),
@@ -280,7 +280,7 @@ class _CameraPageView extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // use a combination of landscape icons
+            // 使用一个类似风景的图标组合
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -382,6 +382,21 @@ class _CameraPageView extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: BottomNavBar(
+        currentIndex: 1, // 相机页面索引为1
+        onTabSelected: (index) {
+          // TODO: 处理导航
+          if (index == 0) {
+            context.go('/');
+          }
+        },
       ),
     );
   }
