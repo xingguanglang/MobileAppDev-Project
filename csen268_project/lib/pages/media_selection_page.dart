@@ -26,15 +26,15 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部导航栏
+            // top navigation bar
             _buildTopBar(context),
-            // Tab切换栏
+            // tab switch bar
             _buildTabBar(),
-            // 媒体网格内容
+            // media grid content
             Expanded(
               child: _buildMediaGrid(),
             ),
-            // 底部Add按钮
+            // bottom add button
             _buildAddButton(context),
           ],
         ),
@@ -49,23 +49,10 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Media Selection 副标题
-          const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Media Selection',
-              style: TextStyle(
-                fontFamily: 'Spline Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                color: Color(0xFF9E9E9E),
-              ),
-            ),
-          ),
-          // 顶部栏：关闭按钮 + New Project标题
+          // top bar: close button + new project title
           Row(
             children: [
-              // 左侧关闭按钮
+              // left close button
               IconButton(
                 icon: Icon(
                   Platform.isIOS ? CupertinoIcons.xmark : Icons.close,
@@ -75,7 +62,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
                 onPressed: () => context.pop(),
               ),
               const Spacer(),
-              // 中间标题
+              // middle title
               const Text(
                 'New Project',
                 style: TextStyle(
@@ -86,7 +73,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
                 ),
               ),
               const Spacer(),
-              // 右侧占位（保持居中）
+              // right placeholder (keep centered)
               SizedBox(
                 width: 48,
                 height: 48,
@@ -152,7 +139,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
   }
 
   Widget _buildMediaGrid() {
-    // 占位数据 - 后续可替换为真实数据
+    // placeholder data - can be replaced with real data later
     final mediaItems = _getMediaItems();
     
     return Container(
@@ -177,14 +164,14 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
   Widget _buildMediaItem(MediaItem item) {
     return GestureDetector(
       onTap: () {
-        // TODO: 处理媒体项点击
+        // TODO: handle media item click
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 图片/视频缩略图占位符
+            // image/video thumbnail placeholder
             Container(
               color: Colors.grey[300],
               child: item.imageUrl != null
@@ -197,7 +184,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
                     )
                   : _buildPlaceholderImage(),
             ),
-            // 如果是视频，显示播放按钮覆盖层
+            // if it's a video, show the play button overlay
             if (item.isVideo)
               Container(
                 color: Colors.black.withValues(alpha: 0.3),
@@ -209,7 +196,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
                   ),
                 ),
               ),
-            // 视频时长标签（可选）
+            // video duration label (optional)
             if (item.isVideo && item.duration != null)
               Positioned(
                 bottom: 8,
@@ -260,7 +247,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
           height: 52,
           child: ElevatedButton(
             onPressed: () {
-              // TODO: 处理Add按钮点击
+              // TODO: handle add button click
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF20C978),
@@ -286,9 +273,9 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
     );
   }
 
-  // 占位数据 - 后续可替换为真实数据源
+  // placeholder data - can be replaced with real data source later
   List<MediaItem> _getMediaItems() {
-    // 这里返回示例数据，后续可以连接到真实的媒体库
+    // here return example data, can be connected to real media library later
     return [
       MediaItem(isVideo: false, imageUrl: null),
       MediaItem(isVideo: false, imageUrl: null),
@@ -306,7 +293,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
   }
 }
 
-// 简单的媒体项数据模型
+// simple media item data model
 class MediaItem {
   final bool isVideo;
   final String? imageUrl;
