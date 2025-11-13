@@ -4,8 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:go_router/go_router.dart';
+import 'package:video_player/video_player.dart';
+import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 enum EditorTab { clip, rotate, adjust }
+enum EditorMode { photo, video }
 
 class EditorPage extends StatefulWidget {
   const EditorPage({super.key});
@@ -16,6 +22,7 @@ class EditorPage extends StatefulWidget {
 class _EditorPageState extends State<EditorPage> {
   // Aspect ratio for preview (visual only, not actual cropping)
   double _aspectW = 16, _aspectH = 9;
+  EditorMode _mode = EditorMode.photo;
 
   // Adjustment parameters
   double _rotationDeg = 0;  // -180 ~ 180
@@ -25,14 +32,28 @@ class _EditorPageState extends State<EditorPage> {
   double _temperature = 0;  // -1 ~ 1 (cold→warm)
 
   File? _imageFile;
+  File? _videoFile;
   EditorTab _tab = EditorTab.adjust;
+  VideoPlayerController? _videoController;
+  RangeValues _trimRange = const RangeValues(0, 0);
+  double _videoDurationMs = 0;
+  final List<_VideoClip> _videoClips = <_VideoClip>[];
 
   bool _isBusy = false; // prevent repeated dialogs
+  bool _isVideoBusy = false;
+  bool _isExportingVideo = false;
+  String? _lastVideoExportPath;
 
   static const Color kGreen = Color(0xFF4BAE61);
   static const double kRadius = 16;
 
   final _picker = ImagePicker();
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +76,13 @@ class _EditorPageState extends State<EditorPage> {
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: _ModeSwitcher(
+                mode: _mode,
+                onModeChanged: (mode) => setState(() => _mode = mode),
+              ),
+            ),
             // === Preview area ===
             Expanded(
               child: Padding(
@@ -66,7 +94,9 @@ class _EditorPageState extends State<EditorPage> {
                     child: Center(
                       child: AspectRatio(
                         aspectRatio: _aspectW / _aspectH,
-                        child: _buildPreview(isDark),
+                        child: _mode == EditorMode.photo
+                            ? _buildPhotoPreview(isDark)
+                            : _buildVideoPreview(isDark),
                       ),
                     ),
                   ),
@@ -75,35 +105,52 @@ class _EditorPageState extends State<EditorPage> {
             ),
 
             // === Bottom controls ===
-            _BottomControls(
-              tab: _tab,
-              onTabChanged: (t) async {
-                if (t == EditorTab.clip) {
-                  await _ensureImageThenCrop(); // don’t switch tabs
-                } else {
-                  setState(() => _tab = t);
-                }
-              },
+            if (_mode == EditorMode.photo)
+              _BottomControls(
+                tab: _tab,
+                onTabChanged: (t) async {
+                  if (t == EditorTab.clip) {
+                    await _ensureImageThenCrop(); // don’t switch tabs
+                  } else {
+                    setState(() => _tab = t);
+                  }
+                },
 
-              // rotate
-              rotation: _rotationDeg,
-              onRotation: (v) => setState(() => _rotationDeg = v),
+                // rotate
+                rotation: _rotationDeg,
+                onRotation: (v) => setState(() => _rotationDeg = v),
 
-              // adjust
-              brightness: _brightness,
-              contrast: _contrast,
-              saturation: _saturation,
-              temperature: _temperature,
-              onBrightness: (v) => setState(() => _brightness = v),
-              onContrast:   (v) => setState(() => _contrast = v),
-              onSaturation: (v) => setState(() => _saturation = v),
-              onTemperature:(v) => setState(() => _temperature = v),
+                // adjust
+                brightness: _brightness,
+                contrast: _contrast,
+                saturation: _saturation,
+                temperature: _temperature,
+                onBrightness: (v) => setState(() => _brightness = v),
+                onContrast:   (v) => setState(() => _contrast = v),
+                onSaturation: (v) => setState(() => _saturation = v),
+                onTemperature:(v) => setState(() => _temperature = v),
 
-              // import/export
-              onImport: _importImage,
-              onExport: () => context.go('/export'),
-              background: card,
-            ),
+                // import/export
+                onImport: _importImage,
+                onExport: () => context.go('/export'),
+                background: card,
+              )
+            else
+              _VideoControls(
+                hasVideo: _videoFile != null,
+                background: card,
+                trimRange: _trimRange,
+                videoDurationMs: _videoDurationMs,
+                clips: _videoClips,
+                isExporting: _isExportingVideo,
+                lastExportedPath: _lastVideoExportPath,
+                onTrimChanged: _updateTrimRange,
+                onImportVideo: _importVideo,
+                onAddClip: _addClipFromRange,
+                onClearClips: _clearVideoClips,
+                onRemoveClip: _removeClipAt,
+                onExport: _exportVideoClips,
+              ),
           ],
         ),
       ),
@@ -111,7 +158,7 @@ class _EditorPageState extends State<EditorPage> {
   }
 
   // ---------- Image Preview ----------
-  Widget _buildPreview(bool isDark) {
+  Widget _buildPhotoPreview(bool isDark) {
     final double c = _contrast;
     final double b = _brightness;
     final double offset = 128.0 * (1.0 - c) + 255.0 * b;
@@ -156,6 +203,76 @@ class _EditorPageState extends State<EditorPage> {
     return Transform.rotate(
       angle: radians,
       child: ColorFiltered(colorFilter: ColorFilter.matrix(m), child: content),
+    );
+  }
+
+  Widget _buildVideoPreview(bool isDark) {
+    final controller = _videoController;
+    if (_videoFile == null || controller == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.video_collection_outlined, size: 72, color: isDark ? Colors.white70 : Colors.black54),
+            const SizedBox(height: 12),
+            Text('Import a video to start trimming.', style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      );
+    }
+
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        if (!value.isInitialized) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final aspect = value.aspectRatio == 0 ? (_aspectW / _aspectH) : value.aspectRatio;
+
+        return GestureDetector(
+          onTap: () async {
+            if (value.isPlaying) {
+              await controller.pause();
+            } else {
+              await controller.play();
+            }
+            if (mounted) setState(() {});
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: value.size.width,
+                  height: value.size.height,
+                  child: AspectRatio(
+                    aspectRatio: aspect,
+                    child: VideoPlayer(controller),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: VideoProgressIndicator(
+                  controller,
+                  allowScrubbing: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+              ),
+              if (!value.isPlaying)
+                Container(
+                  decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                  padding: const EdgeInsets.all(16),
+                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 36),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -265,6 +382,159 @@ class _EditorPageState extends State<EditorPage> {
       setState(() => _imageFile = File(cropped.path));
     }
   }
+
+  Future<void> _importVideo() async {
+    if (_isVideoBusy) return;
+    _isVideoBusy = true;
+    try {
+      final XFile? picked = await _picker.pickVideo(source: ImageSource.gallery);
+      if (picked != null) {
+        await _loadVideo(File(picked.path));
+      }
+    } catch (e) {
+      debugPrint('Video import error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to import video.')));
+      }
+    } finally {
+      _isVideoBusy = false;
+    }
+  }
+
+  Future<void> _loadVideo(File file) async {
+    try {
+      await _videoController?.dispose();
+      final controller = VideoPlayerController.file(file);
+      await controller.initialize();
+      controller.setLooping(true);
+      await controller.play();
+      setState(() {
+        _videoFile = file;
+        _videoController = controller;
+        _videoDurationMs = controller.value.duration.inMilliseconds.toDouble();
+        _trimRange = RangeValues(0, _videoDurationMs);
+        _videoClips.clear();
+        _lastVideoExportPath = null;
+      });
+    } catch (e) {
+      debugPrint('Video load error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load video.')));
+      }
+    }
+  }
+
+  void _updateTrimRange(RangeValues values) {
+    final double maxMs = _videoDurationMs;
+    final double start = values.start.clamp(0, maxMs);
+    final double end = values.end.clamp(0, maxMs);
+    setState(() {
+      _trimRange = RangeValues(math.min(start, end), math.max(start, end));
+    });
+  }
+
+  void _addClipFromRange() {
+    final file = _videoFile;
+    if (file == null || _videoDurationMs <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import a video first.')));
+      }
+      return;
+    }
+
+    final Duration start = Duration(milliseconds: _trimRange.start.round());
+    final Duration end = Duration(milliseconds: _trimRange.end.round());
+    if (end <= start) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clip end must be after start.')));
+      }
+      return;
+    }
+
+    setState(() {
+      _videoClips.add(_VideoClip(sourcePath: file.path, start: start, end: end));
+    });
+  }
+
+  void _removeClipAt(int index) {
+    if (index < 0 || index >= _videoClips.length) return;
+    setState(() {
+      _videoClips.removeAt(index);
+    });
+  }
+
+  void _clearVideoClips() {
+    setState(() {
+      _videoClips.clear();
+    });
+  }
+
+  Future<void> _exportVideoClips() async {
+    if (_videoClips.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Add at least one clip before exporting.')));
+      }
+      return;
+    }
+
+    setState(() => _isExportingVideo = true);
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final outputDir = await getApplicationDocumentsDirectory();
+      final List<String> trimmedPaths = <String>[];
+      for (int i = 0; i < _videoClips.length; i++) {
+        final clip = _videoClips[i];
+        final String outPath = p.join(tempDir.path, 'clip_${DateTime.now().millisecondsSinceEpoch}_$i.mp4');
+        final String start = _durationToSeconds(clip.start);
+        final String end = _durationToSeconds(clip.end);
+        final String command = '-y -ss $start -to $end -i "${clip.sourcePath}" -c copy "$outPath"';
+        final session = await FFmpegKit.execute(command);
+        final returnCode = await session.getReturnCode();
+        if (!ReturnCode.isSuccess(returnCode)) {
+          throw Exception('FFmpeg trim failed');
+        }
+        trimmedPaths.add(outPath);
+      }
+
+      String finalPath;
+      if (trimmedPaths.length == 1) {
+        finalPath = p.join(outputDir.path, 'edited_${DateTime.now().millisecondsSinceEpoch}.mp4');
+        await File(trimmedPaths.first).copy(finalPath);
+      } else {
+        final File concatList = File(p.join(tempDir.path, 'concat_${DateTime.now().millisecondsSinceEpoch}.txt'));
+        await concatList.writeAsString(trimmedPaths.map((path) => "file '$path'").join('\n'));
+        finalPath = p.join(outputDir.path, 'edited_${DateTime.now().millisecondsSinceEpoch}.mp4');
+        final concatCmd = '-y -f concat -safe 0 -i "${concatList.path}" -c copy "$finalPath"';
+        final concatSession = await FFmpegKit.execute(concatCmd);
+        final concatCode = await concatSession.getReturnCode();
+        if (!ReturnCode.isSuccess(concatCode)) {
+          throw Exception('FFmpeg concat failed');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _lastVideoExportPath = finalPath;
+        });
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Exported video saved to $finalPath')));
+      }
+    } catch (e) {
+      debugPrint('Video export error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video export failed.')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingVideo = false);
+      }
+    }
+  }
+
+  String _durationToSeconds(Duration duration) {
+    return (duration.inMilliseconds / 1000).toStringAsFixed(3);
+  }
 }
 
 // ---------- Bottom control section ----------
@@ -354,7 +624,7 @@ class _BottomControls extends StatelessWidget {
   }
 
   Widget _buildToolPanel(ThemeData theme) {
-  switch (tab) {
+    switch (tab) {
     case EditorTab.clip:
       return Center(
         child: Text(
@@ -533,7 +803,7 @@ class _FilledButton extends StatelessWidget {
 
   final String text;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final Color? filledColor;
   final Color? textColor;
 
@@ -559,4 +829,264 @@ class _FilledButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ModeSwitcher extends StatelessWidget {
+  const _ModeSwitcher({required this.mode, required this.onModeChanged});
+
+  final EditorMode mode;
+  final ValueChanged<EditorMode> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPhoto = mode == EditorMode.photo;
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF171B20) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        children: [
+          _buildBtn('Photo', isPhoto, () => onModeChanged(EditorMode.photo)),
+          _buildBtn('Video', !isPhoto, () => onModeChanged(EditorMode.video)),
+        ],
+      ),
+    );
+  }
+
+  Expanded _buildBtn(String label, bool selected, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? _EditorPageState.kGreen : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoControls extends StatelessWidget {
+  const _VideoControls({
+    required this.hasVideo,
+    required this.background,
+    required this.trimRange,
+    required this.videoDurationMs,
+    required this.onTrimChanged,
+    required this.onImportVideo,
+    required this.onAddClip,
+    required this.onClearClips,
+    required this.onRemoveClip,
+    required this.onExport,
+    required this.clips,
+    required this.isExporting,
+    this.lastExportedPath,
+  });
+
+  final bool hasVideo;
+  final Color background;
+  final RangeValues trimRange;
+  final double videoDurationMs;
+  final ValueChanged<RangeValues> onTrimChanged;
+  final VoidCallback onImportVideo;
+  final VoidCallback onAddClip;
+  final VoidCallback onClearClips;
+  final ValueChanged<int> onRemoveClip;
+  final Future<void> Function() onExport;
+  final List<_VideoClip> clips;
+  final bool isExporting;
+  final String? lastExportedPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(_EditorPageState.kRadius),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Trim', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      if (hasVideo)
+                        Text(_formatDuration(Duration(milliseconds: trimRange.end.round())),
+                            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (!hasVideo)
+                    Text('Import a video to unlock trimming controls.', style: theme.textTheme.bodyMedium)
+                  else ...[
+                    RangeSlider(
+                      min: 0,
+                      max: math.max(1, videoDurationMs),
+                      values: RangeValues(
+                        trimRange.start.clamp(0, math.max(1, videoDurationMs)),
+                        trimRange.end.clamp(0, math.max(1, videoDurationMs)),
+                      ),
+                      labels: RangeLabels(
+                        _formatDuration(Duration(milliseconds: trimRange.start.round())),
+                        _formatDuration(Duration(milliseconds: trimRange.end.round())),
+                      ),
+                      onChanged: hasVideo ? onTrimChanged : null,
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(_formatDuration(Duration(milliseconds: trimRange.start.round())),
+                            style: theme.textTheme.labelMedium),
+                        Text(_formatDuration(Duration(milliseconds: videoDurationMs.round())),
+                            style: theme.textTheme.labelMedium),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Clips (${clips.length})',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      if (clips.isNotEmpty)
+                        TextButton(
+                          onPressed: onClearClips,
+                          child: const Text('Clear all'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (clips.isEmpty)
+                    Text('Use "Add clip" after adjusting the range to build your sequence.',
+                        style: theme.textTheme.bodyMedium)
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: clips.length,
+                        itemBuilder: (context, index) {
+                          final clip = clips[index];
+                          final start = _formatDuration(clip.start);
+                          final end = _formatDuration(clip.end);
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              title: Text('Clip ${index + 1}'),
+                              subtitle: Text('$start → $end'),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => onRemoveClip(index),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  if (lastExportedPath != null) ...[
+                    const SizedBox(height: 16),
+                    Text('Last export:', style: theme.textTheme.labelMedium),
+                    SelectableText(lastExportedPath!, style: theme.textTheme.bodySmall),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _FilledButton(
+                    text: 'Import Video',
+                    icon: Icons.video_library_outlined,
+                    onPressed: onImportVideo,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _FilledButton(
+                    text: 'Add Clip',
+                    icon: Icons.content_cut,
+                    onPressed: hasVideo ? onAddClip : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _FilledButton(
+                    text: 'Clear Clips',
+                    icon: Icons.clear_all,
+                    onPressed: clips.isNotEmpty ? onClearClips : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _FilledButton(
+                    text: isExporting ? 'Exporting…' : 'Export Video',
+                    icon: Icons.upload_outlined,
+                    filledColor: _EditorPageState.kGreen,
+                    textColor: Colors.white,
+                    onPressed: (!isExporting && clips.isNotEmpty) ? () => onExport() : null,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60).abs().toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).abs().toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '$hours:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+}
+
+class _VideoClip {
+  _VideoClip({required this.sourcePath, required this.start, required this.end});
+
+  final String sourcePath;
+  final Duration start;
+  final Duration end;
 }
