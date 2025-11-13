@@ -7,6 +7,11 @@ import '../pages/media_selection_page.dart';
 import '../pages/register_page.dart';
 import '../pages/login_page.dart';
 import '../pages/user_page.dart';
+import '../pages/project_detail_page.dart';
+import '../cubits/user_cubit.dart';
+import '../cubits/project_cubit.dart';
+import '../repositories/project_repository.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/login',
@@ -19,7 +24,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/',
       name: 'home',
-      builder: (context, state) => const HomePage(),
+      builder: (context, state) {
+        final userId = context.read<UserCubit>().state.user?.id;
+        if (userId == null) {
+          throw Exception('User must be signed in before loading projects');
+        }
+        return BlocProvider(
+          create: (_) {
+            final cubit = ProjectCubit(ProjectRepository(userId: userId));
+            cubit.loadProjects();
+            return cubit;
+          },
+          child: const HomePage(),
+        );
+      },
     ),
     GoRoute(
       path: '/camera',
@@ -50,6 +68,14 @@ final GoRouter appRouter = GoRouter(
       path: '/user',
       name: 'user',
       builder: (context, state) => const UserPage(),
+    ),
+    GoRoute(
+      path: '/project-detail',
+      name: 'project-detail',
+      builder: (context, state) {
+        final imageUrl = state.extra as String?;
+        return ProjectDetailPage(imageUrl: imageUrl);
+      },
     ),
   ],
 );

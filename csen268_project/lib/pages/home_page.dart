@@ -65,11 +65,11 @@ class HomePage extends StatelessWidget {
               itemBuilder: (context, index) {
                 final project = projects[index];
                 return MyProjectCard(
-                  title: project,
+                  title: project.name,
                   subtitle: 'Edited recently',
-                  imageAsset: null, // replace with actual image resource path
+                  imageUrl: project.imageUrl,
                   onTap: () {
-                    // TODO: click project card to enter detail page
+                    context.push('/project-detail', extra: project.imageUrl);
                   },
                 );
               },

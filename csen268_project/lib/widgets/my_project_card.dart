@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 class MyProjectCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  final String? imageAsset;
+  final String? imageUrl;
   final VoidCallback? onTap;
 
   const MyProjectCard({
     Key? key,
     required this.title,
     required this.subtitle,
-    this.imageAsset,
+    this.imageUrl,
     this.onTap,
   }) : super(key: key);
 
@@ -41,12 +41,13 @@ class MyProjectCard extends StatelessWidget {
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: imageAsset != null
+              child: imageUrl != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(
-                        imageAsset!,
+                      child: Image.network(
+                        imageUrl!,
                         fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
                       ),
                     )
                   : const Icon(Icons.image, color: Colors.grey),
