@@ -4,10 +4,18 @@ import '../pages/export_screen.dart';
 import '../pages/camera_page.dart';
 import '../pages/editor_page.dart';
 import '../pages/media_selection_page.dart';
+import '../pages/register_page.dart';
+import '../pages/login_page.dart';
+import '../pages/user_page.dart';
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/',
+  initialLocation: '/login',
   routes: [
+    GoRoute(
+      path: '/login',
+      name: 'login',
+      builder: (context, state) => const LoginPage(),
+    ),
     GoRoute(
       path: '/',
       name: 'home',
@@ -32,6 +40,16 @@ final GoRouter appRouter = GoRouter(
       path: '/export',
       name: 'export',
       builder: (context, state) => const ExportScreen(),
+    ),
+    GoRoute(
+      path: '/register',
+      name: 'register',
+      builder: (context, state) => const RegisterPage(),
+    ),
+    GoRoute(
+      path: '/user',
+      name: 'user',
+      builder: (context, state) => const UserPage(),
     ),
   ],
 );

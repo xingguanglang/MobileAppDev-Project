@@ -31,11 +31,13 @@ class HomePage extends StatelessWidget {
         actions: [
           IconButton(
             icon: Image.asset(
-              'assets/icons/setting.png',
+              'assets/icons/avatar.png',
               width: 24,
               height: 24,
             ),
-            onPressed: () {},
+            onPressed: () {
+              context.push('/user');
+            },
           ),
         ],
       ),

@@ -2,9 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:csen268_project/cubits/project_cubit.dart';
 import 'routes/app_router.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'cubits/user_cubit.dart';
+import 'repositories/user_repository.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 // Remove old _router and use appRouter
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -14,8 +23,15 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => ProjectCubit()..loadProjects(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (_) => ProjectCubit()..loadProjects(),
+        ),
+        BlocProvider(
+          create: (_) => UserCubit(UserRepository()),
+        ),
+      ],
       child: MaterialApp.router(
         routerConfig: appRouter,
         title: 'Flutter Demo',
