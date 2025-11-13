@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:csen268_project/cubits/camera_cubit.dart';
 import 'package:csen268_project/cubits/camera_state.dart';
 import 'package:csen268_project/widgets/bottom_nav_bar.dart';
+import 'package:camera/camera.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;
 
 class CameraPage extends StatelessWidget {
@@ -113,31 +115,43 @@ class _CameraPageView extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // TODO: the actual camera preview will replace this placeholder
-                Container(
-                  color: Colors.black87,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.camera_alt,
-                          size: 64,
-                          color: Colors.white54,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Camera Preview',
-                          style: TextStyle(
+                // Camera preview
+                if (state.isInitialized && state.controller != null)
+                  SizedBox.expand(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: state.controller!.value.previewSize?.height ?? 1,
+                        height: state.controller!.value.previewSize?.width ?? 1,
+                        child: CameraPreview(state.controller!),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    color: Colors.black87,
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.camera_alt,
+                            size: 64,
                             color: Colors.white54,
-                            fontSize: 16,
                           ),
-                        ),
-                      ],
+                          SizedBox(height: 16),
+                          Text(
+                            'Camera Preview',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                // loading state (iOS style uses CupertinoActivityIndicator)
+                // loading state
                 if (!state.isInitialized)
                   Container(
                     color: Colors.black54,
@@ -152,12 +166,123 @@ class _CameraPageView extends StatelessWidget {
                             ),
                     ),
                   ),
+                // Error message overlay
+                if (state.errorMessage != null)
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            state.errorMessage!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (state.errorMessage!.contains('permanently denied') ||
+                              state.errorMessage!.contains('Settings'))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  await _openAppSettings(context);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Open Settings'),
+                              ),
+                            )
+                          else if (state.errorMessage!.contains('denied'))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  context.read<CameraCubit>().initializeCamera();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Retry'),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Recording duration overlay
+                if (state.recordingState == RecordingState.recording &&
+                    state.recordingDuration != null)
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatDuration(state.recordingDuration!),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _openAppSettings(BuildContext context) async {
+    final opened = await openAppSettings();
+    if (opened) {
+      // Wait a bit for user to return from settings
+      await Future.delayed(const Duration(seconds: 1));
+      // Re-initialize camera when user returns
+      context.read<CameraCubit>().initializeCamera();
+    }
   }
 
   Widget _buildCameraModeSelector(BuildContext context) {
@@ -268,7 +393,7 @@ class _CameraPageView extends StatelessWidget {
   Widget _buildGalleryButton(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        context.read<CameraCubit>().openGallery();
+        context.push('/media-selection');
       },
       child: Container(
         width: 48,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:csen268_project/cubits/project_cubit.dart';
 import 'routes/app_router.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'cubits/user_cubit.dart';
 import 'repositories/user_repository.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,9 +10,15 @@ import 'firebase_options.dart';
 // Remove old _router and use appRouter
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // If Firebase initialization fails (e.g., on macOS), continue without it
+    // This allows the app to run for camera/media selection development
+    print('Firebase initialization failed: $e');
+  }
   runApp(const MyApp());
 }
 
