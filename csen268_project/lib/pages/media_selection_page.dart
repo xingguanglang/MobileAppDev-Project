@@ -65,24 +65,31 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
     try {
       // Request photo library permission
       final PermissionState state = await PhotoManager.requestPermissionExtend();
+      print('📷 Photo library permission state: $state');
       
       if (state == PermissionState.authorized || state == PermissionState.limited) {
         // Permission granted
+        print('📷 Permission granted, loading media...');
         setState(() {
           _hasPermission = true;
+        });
+        // Load media first, then set loading to false
+        await _loadMedia();
+        setState(() {
           _isLoading = false;
         });
-        // Load media
-        await _loadMedia();
       } else {
         // Permission denied
+        print('📷 Permission denied: $state');
         setState(() {
           _hasPermission = false;
           _isLoading = false;
           _errorMessage = 'Photo library permission denied. Please enable it in Settings.';
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('📷 Error initializing photo manager: $e');
+      print('📷 Stack trace: $stackTrace');
       setState(() {
         _hasPermission = false;
         _isLoading = false;
@@ -129,43 +136,55 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
 
   // Task 3.2: Load photos
   Future<void> _loadPhotos({bool loadMore = false}) async {
+    print('📷 Loading photos, loadMore: $loadMore');
     if (!loadMore) {
       _currentPage = 0;
       _photos.clear();
       _hasMore = true;
     }
 
-    final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-      type: RequestType.image,
-      hasAll: true,
-    );
+    try {
+      final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        hasAll: true,
+      );
+      print('📷 Found ${albums.length} photo albums');
 
-    if (albums.isEmpty) {
+      if (albums.isEmpty) {
+        print('📷 No photo albums found');
+        setState(() {
+          _hasMore = false;
+        });
+        return;
+      }
+
+      // Get all photo albums
+      final AssetPathEntity recentAlbum = albums.first;
+      print('📷 Using album: ${recentAlbum.name}');
+      
+      // Fix: Use correct pagination logic
+      final int start = _currentPage * _pageSize;
+      final int end = start + _pageSize;
+      
+      // Get photos in reverse chronological order
+      final List<AssetEntity> assets = await recentAlbum.getAssetListRange(
+        start: start,
+        end: end,
+      );
+      print('📷 Loaded ${assets.length} photos (start: $start, end: $end)');
+
       setState(() {
-        _hasMore = false;
+        _photos.addAll(assets);
+        _currentPage++;
+        // If returned count is less than requested, no more items available
+        _hasMore = assets.length == _pageSize;
       });
-      return;
+      print('📷 Total photos: ${_photos.length}, hasMore: $_hasMore');
+    } catch (e, stackTrace) {
+      print('📷 Error loading photos: $e');
+      print('📷 Stack trace: $stackTrace');
+      rethrow;
     }
-
-    // Get all photo albums
-    final AssetPathEntity recentAlbum = albums.first;
-    
-    // Fix: Use correct pagination logic
-    final int start = _currentPage * _pageSize;
-    final int end = start + _pageSize;
-    
-    // Get photos in reverse chronological order
-    final List<AssetEntity> assets = await recentAlbum.getAssetListRange(
-      start: start,
-      end: end,
-    );
-
-    setState(() {
-      _photos.addAll(assets);
-      _currentPage++;
-      // If returned count is less than requested, no more items available
-      _hasMore = assets.length == _pageSize;
-    });
   }
 
   // Task 3.3: Load videos
