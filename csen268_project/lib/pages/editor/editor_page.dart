@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:csen268_project/models/export_request.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,10 +17,7 @@ import 'trim_page.dart';
 
 class EditorPage extends StatefulWidget {
   final List<String> selectedMediaPaths;
-  const EditorPage({
-    super.key,
-    this.selectedMediaPaths = const [],
-  });
+  const EditorPage({super.key, this.selectedMediaPaths = const []});
   @override
   State<EditorPage> createState() => _EditorPageState();
 }
@@ -50,6 +48,7 @@ class _EditorPageState extends State<EditorPage> {
       _imageFile = File(widget.selectedMediaPaths.first);
     }
   }
+
   @override
   void dispose() {
     _videoController?.dispose();
@@ -95,8 +94,9 @@ class _EditorPageState extends State<EditorPage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(EditorConstants.radius),
                   child: Container(
-                    color:
-                        isDark ? const Color(0xFF1B1F24) : const Color(0xFFEFF3EF),
+                    color: isDark
+                        ? const Color(0xFF1B1F24)
+                        : const Color(0xFFEFF3EF),
                     child: Center(
                       child: _mode == EditMode.photo
                           ? _buildPhotoPreview(isDark)
@@ -133,7 +133,7 @@ class _EditorPageState extends State<EditorPage> {
                 onTemperature: (v) => setState(() => _temperature = v),
 
                 onImport: _importImage,
-                onExport: () => context.go('/export'),
+                onExport: _exportPhoto,
                 background: cardColor,
               )
             else
@@ -158,10 +158,26 @@ class _EditorPageState extends State<EditorPage> {
     final offset = 128.0 * (1 - c) + 255.0 * b;
 
     List<double> matrix = [
-      c, 0, 0, 0, offset,
-      0, c, 0, 0, offset,
-      0, 0, c, 0, offset,
-      0, 0, 0, 1, 0,
+      c,
+      0,
+      0,
+      0,
+      offset,
+      0,
+      c,
+      0,
+      0,
+      offset,
+      0,
+      0,
+      c,
+      0,
+      offset,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
 
     /// Saturation
@@ -169,10 +185,26 @@ class _EditorPageState extends State<EditorPage> {
     final s = _saturation;
     final inv = 1 - s;
     final List<double> satMatrix = [
-      lumR * inv + s, lumG * inv, lumB * inv, 0, 0,
-      lumR * inv, lumG * inv + s, lumB * inv, 0, 0,
-      lumR * inv, lumG * inv, lumB * inv + s, 0, 0,
-      0, 0, 0, 1, 0,
+      lumR * inv + s,
+      lumG * inv,
+      lumB * inv,
+      0,
+      0,
+      lumR * inv,
+      lumG * inv + s,
+      lumB * inv,
+      0,
+      0,
+      lumR * inv,
+      lumG * inv,
+      lumB * inv + s,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
     matrix = _mulMatrix(satMatrix, matrix);
 
@@ -181,18 +213,37 @@ class _EditorPageState extends State<EditorPage> {
     final warm = 0.25 * t;
     final cool = -0.25 * t;
     final List<double> tempMatrix = [
-      1 + warm, 0, 0, 0, 0,
-      0, 1, 0, 0, 0,
-      0, 0, 1 + cool, 0, 0,
-      0, 0, 0, 1, 0,
+      1 + warm,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1 + cool,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
     matrix = _mulMatrix(tempMatrix, matrix);
 
     final angle = _rotationDeg * math.pi / 180;
 
     Widget content = _imageFile == null
-        ? Icon(Icons.image_outlined,
-            size: 72, color: isDark ? Colors.white70 : Colors.black54)
+        ? Icon(
+            Icons.image_outlined,
+            size: 72,
+            color: isDark ? Colors.white70 : Colors.black54,
+          )
         : Image.file(_imageFile!, fit: BoxFit.contain);
 
     return Transform.rotate(
@@ -258,10 +309,12 @@ class _EditorPageState extends State<EditorPage> {
   //                       VIDEO PREVIEW
   // =====================================================
   Widget _buildVideoPreview(bool isDark) {
-    if (_videoController == null ||
-        !_videoController!.value.isInitialized) {
-      return Icon(Icons.video_library_outlined,
-          size: 72, color: isDark ? Colors.white70 : Colors.black45);
+    if (_videoController == null || !_videoController!.value.isInitialized) {
+      return Icon(
+        Icons.video_library_outlined,
+        size: 72,
+        color: isDark ? Colors.white70 : Colors.black45,
+      );
     }
 
     return GestureDetector(
@@ -311,9 +364,7 @@ class _EditorPageState extends State<EditorPage> {
 
     final result = await Navigator.push<String?>(
       context,
-      MaterialPageRoute(
-        builder: (_) => TrimPage(videoFile: _videoFile!),
-      ),
+      MaterialPageRoute(builder: (_) => TrimPage(videoFile: _videoFile!)),
     );
 
     if (result != null) {
@@ -325,16 +376,36 @@ class _EditorPageState extends State<EditorPage> {
   // =====================================================
   //                    EXPORT VIDEO
   // =====================================================
+  Future<void> _exportPhoto() async {
+    if (_imageFile == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("No image to export.")));
+      return;
+    }
+    final request = ExportRequest(
+      filePath: _imageFile!.path,
+      mediaType: ExportMediaType.photo,
+    );
+    if (!mounted) return;
+    context.push('/export', extra: request);
+  }
+
   Future<void> _exportVideo() async {
     if (_videoFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No video to export.")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("No video to export.")));
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Video exported: ${_videoFile!.path}")),
+    final request = ExportRequest(
+      filePath: _videoFile!.path,
+      mediaType: ExportMediaType.video,
+      duration: _videoController?.value.duration,
     );
+    if (!mounted) return;
+    context.push('/export', extra: request);
   }
 }

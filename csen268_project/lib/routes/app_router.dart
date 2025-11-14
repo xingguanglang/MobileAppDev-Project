@@ -12,6 +12,7 @@ import '../cubits/user_cubit.dart';
 import '../cubits/project_cubit.dart';
 import '../repositories/project_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../models/export_request.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/login',
@@ -62,7 +63,11 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/export',
       name: 'export',
-      builder: (context, state) => const ExportScreen(),
+      builder: (context, state) {
+        final extra = state.extra;
+        final request = extra is ExportRequest ? extra : null;
+        return ExportScreen(request: request);
+      },
     ),
     GoRoute(
       path: '/register',
