@@ -42,4 +42,12 @@ class UserRepository {
     }
     return null;
   }
+
+  Future<bool> isUsernameTaken(String username) async {
+    final querySnapshot = await _usersCollection
+      .where('username', isEqualTo: username)
+      .limit(1)
+      .get();
+    return querySnapshot.docs.isNotEmpty;
+  }
 }

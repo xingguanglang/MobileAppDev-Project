@@ -156,6 +156,8 @@ class UserPage extends StatelessWidget {
             const Spacer(),
             ElevatedButton(
                 onPressed: () {
+                  // logout current user, go to login page
+                  context.read<UserCubit>().logout();
                   context.go('/login');
                 },
                 style: ElevatedButton.styleFrom(

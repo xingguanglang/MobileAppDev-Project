@@ -54,6 +54,12 @@ class _RegisterPageState extends State<RegisterPage> {
                   onPressed: () {
                     final username = _usernameController.text.trim();
                     final password = _passwordController.text.trim();
+                    if (username.isEmpty || password.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('username or password cannot be empty')),
+                      );
+                      return;
+                    }
                     context.read<UserCubit>().createUser(username, password, AppUser.userTypeNormal);
                   },
                   child: const Text('register'),

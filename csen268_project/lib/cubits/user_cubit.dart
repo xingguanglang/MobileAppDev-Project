@@ -25,6 +25,11 @@ class UserCubit extends Cubit<UserState> {
 
   Future<void> createUser(String username, String password, String userType) async {
     emit(state.copyWith(loading: true, error: null));
+    final exists = await _repo.isUsernameTaken(username);
+    if (exists) {
+      emit(state.copyWith(loading: false, error: 'username already exists'));
+      return;
+    }
     try {
       final id = await _repo.createUserAutoId(
         AppUser(id: '', username: username, password: password, userType: userType),
@@ -47,19 +52,24 @@ class UserCubit extends Cubit<UserState> {
   }
 
   Future<void> signIn(String username, String password) async {
-    emit(state.copyWith(loading: true, error: null));
+    emit(UserState(loading: true));
     try {
       final user = await _repo.signIn(username, password);
       if (user != null) {
         emit(state.copyWith(loading: false, user: user));
       } else {
-        emit(state.copyWith(loading: false, error: 'Invalid credentials'));
+        emit(UserState(loading: false, error: 'Invalid credentials'));
       }
     } catch (e) {
-      emit(state.copyWith(loading: false, error: e.toString()));
+      emit(UserState(loading: false, error: e.toString()));
     }
   }
   
+  // logout current user, clear user state
+  Future<void> logout() async {
+    emit(UserState());
+  }
+
   /// Upgrade current user to premium
   Future<void> upgradeToPremium() async {
     final currentUser = state.user;

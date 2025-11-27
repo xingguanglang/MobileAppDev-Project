@@ -132,6 +132,13 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: () {
                         final username = _usernameController.text.trim();
                         final password = _passwordController.text.trim();
+                        print('登录时账号: $username, 密码: $password');
+                        if (username.isEmpty || password.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('username or password cannot be empty')),
+                          );
+                          return;
+                        }
                         context.read<UserCubit>().signIn(username, password);
                       },
                       style: ElevatedButton.styleFrom(
