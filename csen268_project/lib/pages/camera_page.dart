@@ -8,6 +8,10 @@ import 'package:csen268_project/widgets/bottom_nav_bar.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 
 class CameraPage extends StatelessWidget {
   const CameraPage({super.key});
@@ -26,28 +30,104 @@ class _CameraPageView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7FBF9),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // top bar
-            _buildTopBar(context),
-            // camera preview area
-            Expanded(
-              child: _buildCameraPreview(context),
+    return BlocListener<CameraCubit, CameraState>(
+      // Only listen when gallerySaveSuccess or gallerySaveError changes
+      listenWhen: (previous, current) {
+        // Trigger only when gallerySaveSuccess changes from non-true to true,
+        // or from non-false to false (with error)
+        return previous.gallerySaveSuccess != current.gallerySaveSuccess ||
+               previous.gallerySaveError != current.gallerySaveError;
+      },
+      listener: (context, state) {
+        // Show feedback when saving to gallery
+        if (state.gallerySaveSuccess == true) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    Platform.isIOS ? CupertinoIcons.check_mark_circled : Icons.check_circle,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Photo saved to gallery'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
             ),
-            // camera mode selector
-            _buildCameraModeSelector(context),
-            const SizedBox(height: 16),
-            // control buttons
-            _buildControlButtons(context),
-            const SizedBox(height: 24),
-          ],
+          );
+          // Reset state after showing message to prevent duplicate triggers
+          Future.microtask(() {
+            context.read<CameraCubit>().resetGallerySaveStatus();
+          });
+        } else if (state.gallerySaveSuccess == false && state.gallerySaveError != null) {
+          // Show error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    Platform.isIOS ? CupertinoIcons.exclamationmark_circle : Icons.error,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      state.gallerySaveError!,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              action: state.gallerySaveError!.contains('permission') ||
+                      state.gallerySaveError!.contains('Settings')
+                  ? SnackBarAction(
+                      label: 'Settings',
+                      textColor: Colors.white,
+                      onPressed: () async {
+                        await _openAppSettings(context);
+                      },
+                    )
+                  : null,
+            ),
+          );
+          // Reset state after showing message to prevent duplicate triggers
+          Future.microtask(() {
+            context.read<CameraCubit>().resetGallerySaveStatus();
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7FBF9),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              // top bar
+              _buildTopBar(context),
+              // camera preview area
+              Expanded(
+                child: _buildCameraPreview(context),
+              ),
+              // camera mode selector
+              _buildCameraModeSelector(context),
+              const SizedBox(height: 16),
+              // control buttons
+              _buildControlButtons(context),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
+        bottomNavigationBar: BottomNavBar(currentIndex: 1),
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 1),
     );
   }
 
@@ -115,57 +195,200 @@ class _CameraPageView extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Camera preview
-                if (state.isInitialized && state.controller != null)
-                  SizedBox.expand(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: state.controller!.value.previewSize?.height ?? 1,
-                        height: state.controller!.value.previewSize?.width ?? 1,
-                        child: CameraPreview(state.controller!),
+                // Dual camera mode
+                if (state.cameraMode == CameraMode.dual) ...[
+                  // Rear camera (main, full screen)
+                  if (state.isRearInitialized && 
+                      state.rearController != null && 
+                      state.rearController!.value.isInitialized)
+                    SizedBox.expand(
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: state.rearController!.value.previewSize?.height ?? 1,
+                          height: state.rearController!.value.previewSize?.width ?? 1,
+                          child: CameraPreview(state.rearController!),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      color: Colors.black87,
+                      child: Center(
+                        child: Platform.isIOS
+                            ? const CupertinoActivityIndicator(
+                                color: Colors.white,
+                                radius: 12,
+                              )
+                            : const CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
                       ),
                     ),
-                  )
-                else
-                  Container(
-                    color: Colors.black87,
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.camera_alt,
-                            size: 64,
-                            color: Colors.white54,
+                  // Front camera (small preview in top right corner)
+                  // Priority: Use frame data if available (more reliable on iOS)
+                  // Fallback: Try CameraPreview directly (may not work in dual mode on iOS)
+                  if (state.isFrontInitialized && 
+                      state.frontController != null &&
+                      state.frontCameraFrame != null &&
+                      state.frontCameraFrameWidth != null &&
+                      state.frontCameraFrameHeight != null)
+                    // Use frame data (from image stream)
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        width: 120,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            'Camera Preview',
-                            style: TextStyle(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _buildFrontCameraPreviewFromFrame(
+                            state.frontController!,
+                            state.frontCameraFrame,
+                            state.frontCameraFrameWidth,
+                            state.frontCameraFrameHeight,
+                          ),
+                        ),
+                      ),
+                    )
+                  // Fallback: Try CameraPreview directly (may show black screen on iOS)
+                  else if (state.isFrontInitialized && 
+                           state.frontController != null && 
+                           state.frontController!.value.isInitialized)
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        width: 120,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _buildFrontCameraPreviewFromFrame(
+                            state.frontController!,
+                            state.frontCameraFrame,
+                            state.frontCameraFrameWidth,
+                            state.frontCameraFrameHeight,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (state.isFrontInitialized && state.frontController != null)
+                    // Front camera is initializing - show loading indicator
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        width: 120,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            width: 2,
+                          ),
+                        ),
+                        child: Center(
+                          child: Platform.isIOS
+                              ? const CupertinoActivityIndicator(
+                                  color: Colors.white,
+                                  radius: 8,
+                                )
+                              : const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    )
+                ]
+                // Single camera mode (front or rear)
+                else ...[
+                  if (state.isInitialized && state.controller != null)
+                    SizedBox.expand(
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: state.controller!.value.previewSize?.height ?? 1,
+                          height: state.controller!.value.previewSize?.width ?? 1,
+                          child: CameraPreview(state.controller!),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      color: Colors.black87,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.camera_alt,
+                              size: 64,
                               color: Colors.white54,
-                              fontSize: 16,
                             ),
-                          ),
-                        ],
+                            SizedBox(height: 16),
+                            Text(
+                              'Camera Preview',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                // loading state
-                if (!state.isInitialized)
-                  Container(
-                    color: Colors.black54,
-                    child: Center(
-                      child: Platform.isIOS
-                          ? const CupertinoActivityIndicator(
-                              color: Colors.white,
-                              radius: 12,
-                            )
-                          : const CircularProgressIndicator(
-                              color: Colors.white,
-                            ),
+                  // loading state
+                  if (!state.isInitialized)
+                    Container(
+                      color: Colors.black54,
+                      child: Center(
+                        child: Platform.isIOS
+                            ? const CupertinoActivityIndicator(
+                                color: Colors.white,
+                                radius: 12,
+                              )
+                            : const CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                      ),
                     ),
-                  ),
+                ],
                 // Error message overlay
                 if (state.errorMessage != null)
                   Positioned(
@@ -275,6 +498,189 @@ class _CameraPageView extends StatelessWidget {
     return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
+  Widget _buildFrontCameraPreviewFromFrame(
+    CameraController controller,
+    Uint8List? frameData,
+    int? frameWidth,
+    int? frameHeight,
+  ) {
+    final isInitialized = controller.value.isInitialized;
+    
+    print('📷 UI: Building front preview from frame - frameData: ${frameData != null ? "${frameData.length} bytes" : "null"}, size: ${frameWidth}x${frameHeight}');
+    
+    if (!isInitialized) {
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: Icon(
+            Icons.camera_alt,
+            color: Colors.white54,
+            size: 32,
+          ),
+        ),
+      );
+    }
+
+    // If we have frame data, convert and display it
+    if (frameData != null && frameData.isNotEmpty && frameWidth != null && frameHeight != null) {
+      print('📷 UI: Converting frame data to image: ${frameWidth}x${frameHeight}, ${frameData.length} bytes');
+      return FutureBuilder<ui.Image>(
+        future: _convertFrameDataToImage(frameData, frameWidth, frameHeight),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data != null) {
+            print('📷 UI: Image converted successfully, displaying');
+            return Transform.scale(
+              scaleX: -1.0, // Mirror horizontally for front camera
+              child: CustomPaint(
+                painter: _FramePainter(snapshot.data!),
+                size: Size.infinite,
+              ),
+            );
+          } else if (snapshot.hasError) {
+            print('📷 UI: Error converting image: ${snapshot.error}');
+            return Container(
+              color: Colors.red.withValues(alpha: 0.3),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Error',
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          } else {
+            print('📷 UI: Converting image...');
+            return Container(
+              color: Colors.black54,
+              child: Center(
+                child: Platform.isIOS
+                    ? const CupertinoActivityIndicator(
+                        color: Colors.white,
+                        radius: 8,
+                      )
+                    : const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      ),
+              ),
+            );
+          }
+        },
+      );
+    }
+
+    // No frame data yet, show loading
+    return Container(
+      color: Colors.black54,
+      child: Center(
+        child: Platform.isIOS
+            ? const CupertinoActivityIndicator(
+                color: Colors.white,
+                radius: 8,
+              )
+            : const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildFrontCameraPreviewDirect(CameraController controller) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null || !controller.value.isInitialized) {
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: Icon(
+            Icons.camera_alt,
+            color: Colors.white54,
+            size: 32,
+          ),
+        ),
+      );
+    }
+
+    // Try to display CameraPreview directly
+    // Use Transform to mirror flip for front camera
+    return Transform.scale(
+      scaleX: -1.0, // Mirror horizontally
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          child: SizedBox(
+            // Swap width and height to match orientation
+            width: previewSize.height,
+            height: previewSize.width,
+            child: CameraPreview(controller),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<ui.Image> _convertFrameDataToImage(Uint8List frameData, int width, int height) async {
+    print('📷 UI: Converting frame to image - ${width}x${height}, ${frameData.length} bytes');
+    // BGRA8888 format: 4 bytes per pixel (B, G, R, A)
+    final completer = Completer<ui.Image>();
+    try {
+      ui.decodeImageFromPixels(
+        frameData,
+        width,
+        height,
+        ui.PixelFormat.bgra8888,
+        (ui.Image image) {
+          print('📷 UI: Image decoded successfully: ${image.width}x${image.height}');
+          completer.complete(image);
+        },
+      );
+    } catch (e) {
+      print('📷 UI: Error in decodeImageFromPixels: $e');
+      completer.completeError(e);
+    }
+    return completer.future;
+  }
+}
+
+class _FramePainter extends CustomPainter {
+  final ui.Image image;
+
+  _FramePainter(this.image);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    final srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final dstRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    canvas.drawImageRect(image, srcRect, dstRect, paint);
+  }
+
+  @override
+  bool shouldRepaint(_FramePainter oldDelegate) {
+    return oldDelegate.image != image;
+  }
+}
+
+extension _CameraPageViewExtension on _CameraPageView {
   Future<void> _openAppSettings(BuildContext context) async {
     final opened = await openAppSettings();
     if (opened) {
