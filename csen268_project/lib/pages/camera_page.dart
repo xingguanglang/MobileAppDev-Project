@@ -41,6 +41,10 @@ class _CameraPageView extends StatelessWidget {
       listener: (context, state) {
         // Show feedback when saving to gallery
         if (state.gallerySaveSuccess == true) {
+          // Determine if it's a video or photo based on last saved path
+          final isVideo = state.lastRecordedVideoPath != null;
+          final message = isVideo ? 'Video saved to gallery' : 'Photo saved to gallery';
+          
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -52,7 +56,7 @@ class _CameraPageView extends StatelessWidget {
                     size: 20,
                   ),
                   const SizedBox(width: 8),
-                  const Text('Photo saved to gallery'),
+                  Text(message),
                 ],
               ),
               backgroundColor: Colors.green,

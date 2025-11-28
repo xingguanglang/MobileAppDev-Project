@@ -498,6 +498,64 @@ class CameraCubit extends Cubit<CameraState> {
     }
   }
 
+  /// Save video to device photo gallery
+  Future<void> _saveVideoToGallery(String videoPath) async {
+    // Check permission first
+    final hasPermission = await _checkPhotoLibraryPermission();
+    if (!hasPermission) {
+      emit(state.copyWith(
+        isSavingToGallery: false,
+        gallerySaveSuccess: false,
+        gallerySaveError: 'Photo library permission denied. Please enable it in Settings.',
+      ));
+      return;
+    }
+
+    try {
+      emit(state.copyWith(
+        isSavingToGallery: true,
+        gallerySaveSuccess: null,
+        gallerySaveError: null,
+      ));
+
+      print('📹 Saving video to gallery: $videoPath');
+      
+      // Check if video file exists
+      final File videoFile = File(videoPath);
+      if (!await videoFile.exists()) {
+        throw Exception('Video file not found: $videoPath');
+      }
+
+      // Generate filename with timestamp
+      final String fileName = 'VID_${DateTime.now().millisecondsSinceEpoch}${path.extension(videoPath)}';
+      
+      // Save to gallery using photo_manager
+      final AssetEntity? savedAsset = await PhotoManager.editor.saveVideo(
+        videoFile,
+        title: path.basenameWithoutExtension(fileName),
+      );
+
+      if (savedAsset != null) {
+        print('📹 ✅ Video saved to gallery successfully: ${savedAsset.id}');
+        emit(state.copyWith(
+          isSavingToGallery: false,
+          gallerySaveSuccess: true,
+          gallerySaveError: null,
+        ));
+      } else {
+        throw Exception('Failed to save video: savedAsset is null');
+      }
+    } catch (e, stackTrace) {
+      print('📹 ❌ Error saving video to gallery: $e');
+      print('📹 Stack trace: $stackTrace');
+      emit(state.copyWith(
+        isSavingToGallery: false,
+        gallerySaveSuccess: false,
+        gallerySaveError: 'Failed to save to gallery: $e',
+      ));
+    }
+  }
+
   /// Reset gallery save status to prevent duplicate notifications
   void resetGallerySaveStatus() {
     emit(state.copyWith(
@@ -569,7 +627,12 @@ class CameraCubit extends Cubit<CameraState> {
           recordingDuration: null,
           lastRecordedVideoPath: savedPath,
           errorMessage: null,
+          gallerySaveSuccess: null,
+          gallerySaveError: null,
         ));
+
+        // Save to gallery asynchronously
+        await _saveVideoToGallery(savedPath);
       }
     } catch (e) {
       _stopRecordingTimer();
