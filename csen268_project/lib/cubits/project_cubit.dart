@@ -24,4 +24,14 @@ class ProjectCubit extends Cubit<List<Project>> {
       // handle error
     }
   }
+
+  // add a method to delete a project
+  Future<void> deleteProject(String projectId) async {
+    try {
+      await _repository.deleteProject(projectId);
+      emit(state.where((p) => p.id != projectId).toList());
+    } catch (e) {
+      // handle error
+    }
+  }
 }

@@ -13,9 +13,17 @@ class ProjectRepository {
         .collection('projects');
   }
 
+  /// create project and save the unique id field in the data
   Future<String> createProjectAutoId(Project project) async {
+    // first generate a document reference to get the unique ID
     final docRef = _projectsCollection.doc();
-    await docRef.set(project.toMap());
+    final projectWithId = Project(
+      id: docRef.id,
+      name: project.name,
+      imageUrl: project.imageUrl,
+    );
+    // save the project data with the id field to Firestore
+    await docRef.set(projectWithId.toMap());
     return docRef.id;
   }
 
@@ -24,5 +32,10 @@ class ProjectRepository {
     return querySnapshot.docs
         .map((doc) => Project.fromMap(doc.data() as Map<String, dynamic>, doc.id))
         .toList();
+  }
+
+  /// delete the specified project
+  Future<void> deleteProject(String projectId) async {
+    await _projectsCollection.doc(projectId).delete();
   }
 }

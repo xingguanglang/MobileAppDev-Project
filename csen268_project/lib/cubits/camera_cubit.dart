@@ -286,12 +286,9 @@ class CameraCubit extends Cubit<CameraState> {
       print('📷 Starting frame capture on front controller: ${frontController.description.name}');
       print('📷 Front controller lens direction: ${frontCamera.lensDirection}');
       
-      // Try to start front camera stream immediately after initialization
-      // Use platform channel on iOS to bypass the limitation
+      // only start front camera frame capture on iOS
       if (Platform.isIOS) {
         _startFrontCameraFrameCaptureViaPlatform();
-      } else {
-        _startFrontCameraFrameCapture(frontController);
       }
     } catch (e, stackTrace) {
       print('📷 ❌ Error initializing dual cameras: $e');

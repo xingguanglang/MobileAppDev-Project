@@ -4,9 +4,37 @@ import 'package:go_router/go_router.dart';
 import 'package:csen268_project/cubits/project_cubit.dart';
 import 'package:csen268_project/widgets/my_project_card.dart';
 import 'package:csen268_project/widgets/bottom_nav_bar.dart';
+import '../routes/app_router.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
+
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with RouteAware {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+    context.read<ProjectCubit>().loadProjects();
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // when the user goes back to the home page from the project detail page, reload the projects
+    context.read<ProjectCubit>().loadProjects();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +97,13 @@ class HomePage extends StatelessWidget {
                   subtitle: 'Edited recently',
                   imageUrl: project.imageUrl,
                   onTap: () {
-                    context.push('/project-detail', extra: project.imageUrl);
+                    context.push(
+                      '/project-detail',
+                      extra: {
+                        'id': project.id,
+                        'imageUrl': project.imageUrl,
+                      },
+                    );
                   },
                 );
               },

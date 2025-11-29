@@ -183,7 +183,7 @@ class _ExportScreenState extends State<ExportScreen> {
               width: double.infinity,
               height: 54,
               child: ElevatedButton(
-                onPressed: _isSaving ? null : _saveToDevice,
+                onPressed: (widget.request == null || _isSaving) ? null : _saveToDevice,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00A86B),
                   shape: RoundedRectangleBorder(

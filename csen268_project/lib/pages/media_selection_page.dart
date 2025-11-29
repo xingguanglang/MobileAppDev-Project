@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:csen268_project/cubits/project_cubit.dart';
 
 enum MediaType {
   videos,
@@ -834,11 +836,10 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
         return;
       }
 
-      // Pass selected media path to Editor Page
-      final selectedPaths = [file.path];
-      
-      // Navigate to editor page
-      context.push('/editor', extra: selectedPaths);
+      // create new project, use selected media as cover  
+      await context.read<ProjectCubit>().addProject('New Project', file.path);
+      // after successful creation, return to home page
+      context.go('/');
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

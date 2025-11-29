@@ -15,6 +15,7 @@ class Project {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'imageUrl': imageUrl,
     };

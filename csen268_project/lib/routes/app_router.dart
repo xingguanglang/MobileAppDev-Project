@@ -13,8 +13,12 @@ import '../cubits/project_cubit.dart';
 import '../repositories/project_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/export_request.dart';
+import 'package:flutter/widgets.dart';
+
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
 
 final GoRouter appRouter = GoRouter(
+  observers: [routeObserver],
   initialLocation: '/login',
   routes: [
     GoRoute(
@@ -39,6 +43,27 @@ final GoRouter appRouter = GoRouter(
           child: const HomePage(),
         );
       },
+      routes: [
+        GoRoute(
+          path: 'media-selection',
+          name: 'media-selection',
+          builder: (context, state) {
+            // create a separate ProjectCubit for media-selection
+            final userId = context.read<UserCubit>().state.user?.id;
+            if (userId == null) {
+              throw Exception('User must be signed in before selecting media');
+            }
+            return BlocProvider(
+              create: (_) {
+                final cubit = ProjectCubit(ProjectRepository(userId: userId));
+                cubit.loadProjects();
+                return cubit;
+              },
+              child: const MediaSelectionPage(),
+            );
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/camera',
@@ -54,11 +79,6 @@ final GoRouter appRouter = GoRouter(
         final selectedMediaPaths = state.extra as List<String>? ?? [];
         return EditorPage(selectedMediaPaths: selectedMediaPaths);
       },
-    ),
-    GoRoute(
-      path: '/media-selection',
-      name: 'media-selection',
-      builder: (context, state) => const MediaSelectionPage(),
     ),
     GoRoute(
       path: '/export',
@@ -83,8 +103,25 @@ final GoRouter appRouter = GoRouter(
       path: '/project-detail',
       name: 'project-detail',
       builder: (context, state) {
-        final imageUrl = state.extra as String?;
-        return ProjectDetailPage(imageUrl: imageUrl);
+        final extra = state.extra as Map<String, dynamic>?;
+        final projectId = extra?['id'] as String?;
+        final imageUrl = extra?['imageUrl'] as String?;
+        if (projectId == null) {
+          throw Exception('Project ID is required');
+        }
+        return BlocProvider(
+          create: (_) {
+            final userId = context.read<UserCubit>().state.user?.id;
+            if (userId == null) throw Exception('User must be signed in before viewing project details');
+            final cubit = ProjectCubit(ProjectRepository(userId: userId));
+            cubit.loadProjects();
+            return cubit;
+          },
+          child: ProjectDetailPage(
+            projectId: projectId,
+            imageUrl: imageUrl,
+          ),
+        );
       },
     ),
   ],
