@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../models/user_model.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({Key? key}) : super(key: key);
+  const RegisterPage({super.key});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();

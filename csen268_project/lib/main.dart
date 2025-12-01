@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:csen268_project/cubits/project_cubit.dart';
 import 'routes/app_router.dart';
 import 'cubits/user_cubit.dart';
 import 'repositories/user_repository.dart';
-import 'package:csen268_project/repositories/project_repository.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 

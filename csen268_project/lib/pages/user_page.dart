@@ -4,7 +4,7 @@ import '../cubits/user_cubit.dart';
 import 'package:go_router/go_router.dart';
 
 class UserPage extends StatelessWidget {
-  const UserPage({Key? key}) : super(key: key);
+  const UserPage({super.key});
 
   @override
   Widget build(BuildContext context) {

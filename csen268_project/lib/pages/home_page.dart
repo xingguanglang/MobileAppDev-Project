@@ -7,7 +7,7 @@ import 'package:csen268_project/widgets/bottom_nav_bar.dart';
 import '../routes/app_router.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   @override
   _HomePageState createState() => _HomePageState();

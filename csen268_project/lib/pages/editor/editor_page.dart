@@ -2,7 +2,9 @@
 
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:csen268_project/models/export_request.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -35,6 +37,7 @@ class _EditorPageState extends State<EditorPage> {
   double _contrast = 1;
   double _saturation = 1;
   double _temperature = 0;
+  final GlobalKey _previewKey = GlobalKey();
 
   File? _imageFile;
   EditorTab _tab = EditorTab.adjust;
@@ -163,90 +166,8 @@ class _EditorPageState extends State<EditorPage> {
   //                      PHOTO PREVIEW
   // =====================================================
   Widget _buildPhotoPreview(bool isDark) {
-    final c = _contrast;
-    final b = _brightness;
-    final offset = 128.0 * (1 - c) + 255.0 * b;
-
-    List<double> matrix = [
-      c,
-      0,
-      0,
-      0,
-      offset,
-      0,
-      c,
-      0,
-      0,
-      offset,
-      0,
-      0,
-      c,
-      0,
-      offset,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-
-    /// Saturation
-    const lumR = 0.3086, lumG = 0.6094, lumB = 0.0820;
-    final s = _saturation;
-    final inv = 1 - s;
-    final List<double> satMatrix = [
-      lumR * inv + s,
-      lumG * inv,
-      lumB * inv,
-      0,
-      0,
-      lumR * inv,
-      lumG * inv + s,
-      lumB * inv,
-      0,
-      0,
-      lumR * inv,
-      lumG * inv,
-      lumB * inv + s,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-    matrix = _mulMatrix(satMatrix, matrix);
-
-    /// Temperature
-    final t = _temperature;
-    final warm = 0.25 * t;
-    final cool = -0.25 * t;
-    final List<double> tempMatrix = [
-      1 + warm,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1 + cool,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-    matrix = _mulMatrix(tempMatrix, matrix);
-
     final angle = _rotationDeg * math.pi / 180;
+    final matrix = _composeColorMatrix();
 
     Widget content = _imageFile == null
         ? Icon(
@@ -256,11 +177,14 @@ class _EditorPageState extends State<EditorPage> {
           )
         : Image.file(_imageFile!, fit: BoxFit.contain);
 
-    return Transform.rotate(
-      angle: angle,
-      child: ColorFiltered(
-        colorFilter: ColorFilter.matrix(matrix),
-        child: content,
+    return RepaintBoundary(
+      key: _previewKey,
+      child: Transform.rotate(
+        angle: angle,
+        child: ColorFiltered(
+          colorFilter: ColorFilter.matrix(matrix),
+          child: content,
+        ),
       ),
     );
   }
@@ -387,8 +311,16 @@ class _EditorPageState extends State<EditorPage> {
       ).showSnackBar(const SnackBar(content: Text("No image to export.")));
       return;
     }
+    final renderedFile = await _renderEditedPhoto();
+    if (renderedFile == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to prepare edited image.")),
+      );
+      return;
+    }
     final request = ExportRequest(
-      filePath: _imageFile!.path,
+      filePath: renderedFile.path,
       mediaType: ExportMediaType.photo,
     );
     if (!mounted) return;
@@ -457,5 +389,166 @@ class _EditorPageState extends State<EditorPage> {
         const SnackBar(content: Text("please select a valid project image")),
       );
     }
+  }
+
+  Future<File?> _renderEditedPhoto() async {
+    if (_imageFile == null) return null;
+
+    try {
+      final bytes = await _imageFile!.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frameInfo = await codec.getNextFrame();
+      final original = frameInfo.image;
+
+      final angle = _rotationDeg * math.pi / 180;
+      final size = _rotatedSize(
+        original.width.toDouble(),
+        original.height.toDouble(),
+        angle,
+      );
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+
+      // Center + rotate the canvas before drawing with the color matrix applied.
+      canvas.translate(size.width / 2, size.height / 2);
+      canvas.rotate(angle);
+      canvas.translate(-original.width / 2, -original.height / 2);
+
+      final paint = Paint()
+        ..filterQuality = FilterQuality.high
+        ..colorFilter = ColorFilter.matrix(_composeColorMatrix());
+
+      final srcRect = Rect.fromLTWH(
+        0,
+        0,
+        original.width.toDouble(),
+        original.height.toDouble(),
+      );
+      final dstRect = Rect.fromLTWH(
+        0,
+        0,
+        original.width.toDouble(),
+        original.height.toDouble(),
+      );
+      canvas.drawImageRect(original, srcRect, dstRect, paint);
+
+      final picture = recorder.endRecording();
+      final editedImage = await picture.toImage(
+        size.width.round().clamp(1, 20000),
+        size.height.round().clamp(1, 20000),
+      );
+
+      final byteData = await editedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      original.dispose();
+      editedImage.dispose();
+      if (byteData == null) return null;
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/edited_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+      return file;
+    } catch (e) {
+      debugPrint('Failed to render edited photo: $e');
+      return null;
+    }
+  }
+
+  Size _rotatedSize(double width, double height, double angle) {
+    final cosA = math.cos(angle).abs();
+    final sinA = math.sin(angle).abs();
+    return Size(
+      width * cosA + height * sinA,
+      width * sinA + height * cosA,
+    );
+  }
+
+  List<double> _composeColorMatrix() {
+    final c = _contrast;
+    final b = _brightness;
+    final offset = 128.0 * (1 - c) + 255.0 * b;
+
+    List<double> matrix = [
+      c,
+      0,
+      0,
+      0,
+      offset,
+      0,
+      c,
+      0,
+      0,
+      offset,
+      0,
+      0,
+      c,
+      0,
+      offset,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+
+    // Saturation
+    const lumR = 0.3086, lumG = 0.6094, lumB = 0.0820;
+    final s = _saturation;
+    final inv = 1 - s;
+    final List<double> satMatrix = [
+      lumR * inv + s,
+      lumG * inv,
+      lumB * inv,
+      0,
+      0,
+      lumR * inv,
+      lumG * inv + s,
+      lumB * inv,
+      0,
+      0,
+      lumR * inv,
+      lumG * inv,
+      lumB * inv + s,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+    matrix = _mulMatrix(satMatrix, matrix);
+
+    // Temperature
+    final t = _temperature;
+    final warm = 0.25 * t;
+    final cool = -0.25 * t;
+    final List<double> tempMatrix = [
+      1 + warm,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1 + cool,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+    return _mulMatrix(tempMatrix, matrix);
   }
 }
