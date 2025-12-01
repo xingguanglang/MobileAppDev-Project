@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 enum CameraMode {
   front,
   rear,
-  dual,
 }
 
 enum RecordingState {
@@ -58,13 +57,7 @@ class CameraState {
 
   // Getter to determine if cameras are initialized based on mode
   bool get areCamerasInitialized {
-    switch (cameraMode) {
-      case CameraMode.dual:
-        return isFrontInitialized && isRearInitialized;
-      case CameraMode.front:
-      case CameraMode.rear:
-        return isInitialized;
-    }
+    return isInitialized;
   }
 
   CameraState copyWith({
