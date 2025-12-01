@@ -9,9 +9,9 @@ class ProjectCubit extends Cubit<List<Project>> {
   Future<void> loadProjects() async {
     try {
       final projects = await _repository.getAllProjects();
-      emit(projects);
+      if (!isClosed) emit(projects);
     } catch (e) {
-      emit([]);
+      if (!isClosed) emit([]);
     }
   }
 

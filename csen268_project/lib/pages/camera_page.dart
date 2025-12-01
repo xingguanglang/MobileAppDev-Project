@@ -510,7 +510,7 @@ class _CameraPageView extends StatelessWidget {
   ) {
     final isInitialized = controller.value.isInitialized;
     
-    print('📷 UI: Building front preview from frame - frameData: ${frameData != null ? "${frameData.length} bytes" : "null"}, size: ${frameWidth}x${frameHeight}');
+    print('📷 UI: Building front preview from frame - frameData: ${frameData != null ? "${frameData.length} bytes" : "null"}, size: ${frameWidth}x$frameHeight');
     
     if (!isInitialized) {
       return Container(
@@ -527,7 +527,7 @@ class _CameraPageView extends StatelessWidget {
 
     // If we have frame data, convert and display it
     if (frameData != null && frameData.isNotEmpty && frameWidth != null && frameHeight != null) {
-      print('📷 UI: Converting frame data to image: ${frameWidth}x${frameHeight}, ${frameData.length} bytes');
+      print('📷 UI: Converting frame data to image: ${frameWidth}x$frameHeight, ${frameData.length} bytes');
       return FutureBuilder<ui.Image>(
         future: _convertFrameDataToImage(frameData, frameWidth, frameHeight),
         builder: (context, snapshot) {
@@ -643,7 +643,7 @@ class _CameraPageView extends StatelessWidget {
   }
 
   Future<ui.Image> _convertFrameDataToImage(Uint8List frameData, int width, int height) async {
-    print('📷 UI: Converting frame to image - ${width}x${height}, ${frameData.length} bytes');
+    print('📷 UI: Converting frame to image - ${width}x$height, ${frameData.length} bytes');
     // BGRA8888 format: 4 bytes per pixel (B, G, R, A)
     final completer = Completer<ui.Image>();
     try {

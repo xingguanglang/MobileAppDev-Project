@@ -468,7 +468,7 @@ class CameraCubit extends Cubit<CameraState> {
       final String fileName = 'IMG_${DateTime.now().millisecondsSinceEpoch}${path.extension(imagePath)}';
       
       // Save to gallery using photo_manager
-      final AssetEntity? savedAsset = await PhotoManager.editor.saveImage(
+      final AssetEntity savedAsset = await PhotoManager.editor.saveImage(
         imageBytes,
         title: path.basenameWithoutExtension(fileName),
         filename: fileName,
@@ -527,7 +527,7 @@ class CameraCubit extends Cubit<CameraState> {
       final String fileName = 'VID_${DateTime.now().millisecondsSinceEpoch}${path.extension(videoPath)}';
       
       // Save to gallery using photo_manager
-      final AssetEntity? savedAsset = await PhotoManager.editor.saveVideo(
+      final AssetEntity savedAsset = await PhotoManager.editor.saveVideo(
         videoFile,
         title: path.basenameWithoutExtension(fileName),
       );
@@ -751,7 +751,7 @@ class CameraCubit extends Cubit<CameraState> {
                 }
 
                 _lastFrameEmitTime = now;
-                print('📷 Received frame from platform: ${width}x${height}, ${data.length} bytes');
+                print('📷 Received frame from platform: ${width}x$height, ${data.length} bytes');
 
                 emit(state.copyWith(
                   frontCameraFrame: data,

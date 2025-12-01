@@ -1,7 +1,11 @@
 import 'dart:io';
 
 import 'package:csen268_project/models/export_request.dart';
+import 'package:csen268_project/models/project_model.dart';
+import 'package:csen268_project/repositories/project_repository.dart';
+import 'package:csen268_project/cubits/user_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
@@ -15,19 +19,18 @@ class ExportScreen extends StatefulWidget {
 }
 
 class _ExportScreenState extends State<ExportScreen> {
-  String _selectedResolution = '1080p';
-  String _selectedFps = '30 fps';
-
-  final List<String> _resolutions = ['720p', '1080p', '4K'];
-  final List<String> _fpsOptions = ['24 fps', '30 fps', '60 fps'];
+  final TextEditingController _projectNameController = TextEditingController();
+  int _previewVersion = 0; // bump to force rebuild when file updates
   VideoPlayerController? _videoController;
   bool _initializingVideo = false;
   bool _isSaving = false;
+  bool _isSavingProject = false;
 
   @override
   void initState() {
     super.initState();
-    _initializePreview();
+    _projectNameController.text = _defaultProjectName();
+    _initializePreview(initial: true);
   }
 
   @override
@@ -35,19 +38,24 @@ class _ExportScreenState extends State<ExportScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.request?.filePath != widget.request?.filePath ||
         oldWidget.request?.mediaType != widget.request?.mediaType) {
+      _evictImageCache(widget.request?.filePath);
+      _previewVersion++;
+      _projectNameController.text = _defaultProjectName();
       _disposeVideo();
-      _initializePreview();
+      _initializePreview(initial: true);
     }
   }
 
   @override
   void dispose() {
     _disposeVideo();
+    _projectNameController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isVideo = widget.request?.isVideo ?? false;
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -69,90 +77,7 @@ class _ExportScreenState extends State<ExportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildPreviewSection(),
-            const SizedBox(height: 24),
-
-            // Settings title
-            const Text(
-              'Settings',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Resolution
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Resolution',
-                  style: TextStyle(fontSize: 15, color: Colors.black),
-                ),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedResolution,
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.black,
-                    ),
-                    items: _resolutions
-                        .map(
-                          (res) => DropdownMenuItem(
-                            value: res,
-                            child: Text(
-                              res,
-                              style: const TextStyle(
-                                color: Colors.teal,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedResolution = v!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Frame Rate
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Frame Rate',
-                  style: TextStyle(fontSize: 15, color: Colors.black),
-                ),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedFps,
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.black,
-                    ),
-                    items: _fpsOptions
-                        .map(
-                          (fps) => DropdownMenuItem(
-                            value: fps,
-                            child: Text(
-                              fps,
-                              style: const TextStyle(
-                                color: Colors.teal,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedFps = v!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 32),
 
             // Share title
             const Text(
@@ -177,6 +102,79 @@ class _ExportScreenState extends State<ExportScreen> {
             ),
 
             const Spacer(),
+
+            // Save to My Projects
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Save to My Projects',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _projectNameController,
+                    decoration: InputDecoration(
+                      hintText: 'Project name',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Colors.black12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: (_isSavingProject || widget.request == null) ? null : _saveToProjects,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black87,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: _isSavingProject
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text(
+                              'Save to My Projects',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // Save button
             SizedBox(
@@ -234,7 +232,8 @@ class _ExportScreenState extends State<ExportScreen> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: 200,
+        // increased height since settings were removed; use available space for preview
+        height: 280,
         width: double.infinity,
         color: Colors.black12,
         child: child,
@@ -247,11 +246,16 @@ class _ExportScreenState extends State<ExportScreen> {
     if (!file.existsSync()) {
       return _buildPlaceholder('Image file not found');
     }
-    return Image.file(
-      file,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
+    final imageProvider = FileImage(file);
+    imageProvider.evict(); // ensure refreshed when path reused
+    return Center(
+      child: Image(
+        key: ValueKey('${path}_${_fileModifiedAtMs(file)}_$_previewVersion'),
+        image: imageProvider,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        height: double.infinity,
+      ),
     );
   }
 
@@ -273,29 +277,29 @@ class _ExportScreenState extends State<ExportScreen> {
         }
         setState(() {});
       },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: _videoController!.value.aspectRatio,
-            child: VideoPlayer(_videoController!),
-          ),
-          if (!_videoController!.value.isPlaying)
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(40),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              AspectRatio(
+                aspectRatio: _videoController!.value.aspectRatio,
+                child: VideoPlayer(_videoController!),
+              ),
+              if (!_videoController!.value.isPlaying)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(40),
               ),
               padding: const EdgeInsets.all(12),
-              child: const Icon(
-                Icons.play_arrow,
-                size: 40,
-                color: Colors.white,
-              ),
-            ),
-        ],
-      ),
-    );
+                  child: const Icon(
+                    Icons.play_arrow,
+                    size: 40,
+                    color: Colors.white,
+                  ),
+                ),
+            ],
+          ),
+        );
   }
 
   Widget _buildPlaceholder(String message) {
@@ -331,7 +335,7 @@ class _ExportScreenState extends State<ExportScreen> {
     );
   }
 
-  Future<void> _initializePreview() async {
+  Future<void> _initializePreview({bool initial = false}) async {
     final request = widget.request;
     if (request == null || !request.isVideo) return;
 
@@ -388,7 +392,7 @@ class _ExportScreenState extends State<ExportScreen> {
 
     try {
       await Share.shareXFiles([
-        XFile(request.filePath),
+        XFile(file.path),
       ], text: 'Created with CSEN268 Project and sharing on $platformName!');
     } catch (e) {
       _showMessage('Share failed: $e');
@@ -487,4 +491,68 @@ class _ExportScreenState extends State<ExportScreen> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  void _evictImageCache(String? path) {
+    if (path == null || path.isEmpty) return;
+    final file = File(path);
+    if (!file.existsSync()) return;
+    FileImage(file).evict();
+  }
+
+  int _fileModifiedAtMs(File file) {
+    try {
+      return file.lastModifiedSync().millisecondsSinceEpoch;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  String _defaultProjectName() {
+    final path = widget.request?.filePath;
+    if (path == null || path.isEmpty) return 'Edited Project';
+    final segments = path.split(RegExp(r'[\\/]+'));
+    final fileName = segments.isNotEmpty ? segments.last : 'Edited Project';
+    return fileName;
+  }
+
+  Future<void> _saveToProjects() async {
+    final request = widget.request;
+    if (request == null) {
+      _showMessage('No file available to save');
+      return;
+    }
+
+    final userId = context.read<UserCubit>().state.user?.id;
+    if (userId == null || userId.isEmpty) {
+      _showMessage('Please sign in to save projects');
+      return;
+    }
+
+    final name = _projectNameController.text.trim().isEmpty
+        ? _defaultProjectName()
+        : _projectNameController.text.trim();
+
+    if (!mounted) return;
+    setState(() {
+      _isSavingProject = true;
+    });
+
+    final repository = ProjectRepository(userId: userId);
+    try {
+      await repository.createProjectAutoId(
+        Project(id: '', name: name, imageUrl: request.filePath),
+      );
+      if (!mounted) return;
+      _showMessage('Saved to My Projects');
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('Save failed: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isSavingProject = false;
+      });
+    }
+  }
+
 }

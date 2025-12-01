@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 class AppShell extends StatefulWidget {
   final Widget child;
   final String location;
-  const AppShell({Key? key, required this.child, required this.location}) : super(key: key);
+  const AppShell({super.key, required this.child, required this.location});
 
   @override
   State<AppShell> createState() => _AppShellState();

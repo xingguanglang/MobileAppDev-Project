@@ -29,8 +29,8 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
   String? _errorMessage;
   
   // Task 3.2 & 3.3: Media lists
-  List<AssetEntity> _photos = [];
-  List<AssetEntity> _videos = [];
+  final List<AssetEntity> _photos = [];
+  final List<AssetEntity> _videos = [];
   bool _isLoadingMedia = false;
   
   // Task 3.4: Media selection (single selection)
@@ -46,7 +46,7 @@ class _MediaSelectionPageState extends State<MediaSelectionPage> {
   List<AssetPathEntity> _albums = [];
   bool _isLoadingAlbums = false;
   AssetPathEntity? _selectedAlbum; // Currently selected album (for displaying album details)
-  List<AssetEntity> _albumMedia = []; // Media list of the current album
+  final List<AssetEntity> _albumMedia = []; // Media list of the current album
   int _albumCurrentPage = 0;
   bool _albumHasMore = true;
   bool _isLoadingAlbumMedia = false;

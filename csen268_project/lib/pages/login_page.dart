@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../models/user_model.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -166,8 +166,8 @@ class _LoginPageState extends State<LoginPage> {
                         showDialog(
                           context: context,
                           builder: (dialogContext) {
-                            final _regUsernameController = TextEditingController();
-                            final _regPasswordController = TextEditingController();
+                            final regUsernameController = TextEditingController();
+                            final regPasswordController = TextEditingController();
                             return Dialog(
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               child: Padding(
@@ -189,7 +189,7 @@ class _LoginPageState extends State<LoginPage> {
                                     const Text('Username'),
                                     const SizedBox(height: 8),
                                     TextField(
-                                      controller: _regUsernameController,
+                                      controller: regUsernameController,
                                       decoration: InputDecoration(
                                         filled: true,
                                         fillColor: Colors.white,
@@ -201,7 +201,7 @@ class _LoginPageState extends State<LoginPage> {
                                     const Text('Password'),
                                     const SizedBox(height: 8),
                                     TextField(
-                                      controller: _regPasswordController,
+                                      controller: regPasswordController,
                                       obscureText: true,
                                       decoration: InputDecoration(
                                         filled: true,
@@ -221,8 +221,8 @@ class _LoginPageState extends State<LoginPage> {
                                         const SizedBox(width: 8),
                                         ElevatedButton(
                                           onPressed: () {
-                                            final username = _regUsernameController.text.trim();
-                                            final password = _regPasswordController.text.trim();
+                                            final username = regUsernameController.text.trim();
+                                            final password = regPasswordController.text.trim();
                                             context.read<UserCubit>().createUser(username, password, AppUser.userTypeNormal);
                                             Navigator.of(dialogContext).pop();
                                           },

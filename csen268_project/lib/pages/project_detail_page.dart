@@ -7,10 +7,10 @@ class ProjectDetailPage extends StatelessWidget {
   final String projectId;
   final String? imageUrl;
   const ProjectDetailPage({
-    Key? key,
+    super.key,
     required this.projectId,
     this.imageUrl,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
