@@ -1,0 +1,18 @@
+flutter_native_splash:
+  # 背景颜色 - 使用绿色主题
+  color: "#F7FBF9"
+  
+  # 不显示logo（按用户要求）
+  # image: assets/logo.png
+  
+  # Android 配置
+  android: true
+  android_12:
+    color: "#F7FBF9"
+  
+  # iOS 配置
+  ios: true
+  
+  # 全屏显示
+  fullscreen: true
+

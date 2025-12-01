@@ -8,6 +8,7 @@ import '../pages/register_page.dart';
 import '../pages/login_page.dart';
 import '../pages/user_page.dart';
 import '../pages/project_detail_page.dart';
+import '../pages/splash_screen.dart';
 import '../cubits/user_cubit.dart';
 import '../cubits/project_cubit.dart';
 import '../repositories/project_repository.dart';
@@ -19,8 +20,13 @@ final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<v
 
 final GoRouter appRouter = GoRouter(
   observers: [routeObserver],
-  initialLocation: '/login',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/splash',
+      name: 'splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     GoRoute(
       path: '/login',
       name: 'login',
