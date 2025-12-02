@@ -1,9 +1,12 @@
 import Flutter
 import UIKit
 import AVFoundation
+import FirebaseCore
+import FirebaseMessaging
+import UserNotifications
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
   private var frontCameraMethodChannel: FlutterMethodChannel?
   private var frontCameraEventChannel: FlutterEventChannel?
   private var frontCameraEventSink: FlutterEventSink?
@@ -51,6 +54,12 @@ import AVFoundation
     frontCameraEventChannel?.setStreamHandler(streamHandler)
     
     GeneratedPluginRegistrant.register(with: self)
+    FirebaseApp.configure()
+    // 注册通知委托
+    UNUserNotificationCenter.current().delegate = self
+    let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
+    UNUserNotificationCenter.current().requestAuthorization(options: authOptions) { granted, error in }
+    application.registerForRemoteNotifications()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
@@ -118,6 +127,13 @@ import AVFoundation
     frontCameraDevice = nil
     frontCameraEventSink = nil
     result(true)
+  }
+}
+
+// MARK: - FCM Delegate
+extension AppDelegate: MessagingDelegate {
+  func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    print("FCM registration token: \(fcmToken ?? "")")
   }
 }
 

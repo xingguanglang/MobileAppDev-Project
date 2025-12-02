@@ -45,3 +45,13 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Firebase BOM ensures consistent versions
+    implementation(platform("com.google.firebase:firebase-bom:32.3.2"))
+    // Firebase Messaging Kotlin extension
+    implementation("com.google.firebase:firebase-messaging:23.2.6")
+    // Firebase In-App Messaging and Analytics
+    implementation("com.google.firebase:firebase-inappmessaging-display")
+    implementation("com.google.firebase:firebase-analytics")
+}

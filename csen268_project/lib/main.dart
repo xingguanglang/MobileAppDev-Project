@@ -5,6 +5,16 @@ import 'cubits/user_cubit.dart';
 import 'repositories/user_repository.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_in_app_messaging/firebase_in_app_messaging.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  print('Background message received: ${message.messageId}');
+}
 
 // Remove old _router and use appRouter
 void main() async {
@@ -18,6 +28,24 @@ void main() async {
     // This allows the app to run for camera/media selection development
     print('Firebase initialization failed: $e');
   }
+  // enable In-App message display
+  FirebaseInAppMessaging.instance.setMessagesSuppressed(false);
+  // set background message handling
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // request notification permissions
+  NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  print('User granted permission: ${settings.authorizationStatus}');
+  // listen for foreground messages
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print('Foreground message received: ${message.notification?.title}');
+  });
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    print('Notification clicked: ${message.data}');
+  });
   runApp(const MyApp());
 }
 
